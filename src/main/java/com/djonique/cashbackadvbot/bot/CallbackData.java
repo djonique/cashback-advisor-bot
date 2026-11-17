@@ -5,8 +5,9 @@ public final class CallbackData {
     public static final String MENU_MAIN = "menu:main";
     public static final String MENU_CHOOSE = "menu:choose";
     public static final String MENU_SETUP = "menu:setup";
+    public static final String MENU_MY_SELECTIONS = "menu:my_selections";
     public static final String MENU_NEW_CARD = "menu:new_card";
-    public static final String MENU_DONATE = "menu:donate";
+    public static final String MENU_SUPPORT = "menu:support";
     public static final String MENU_HELP = "menu:help";
 
     public static final String CARD_MENU = "card:menu";

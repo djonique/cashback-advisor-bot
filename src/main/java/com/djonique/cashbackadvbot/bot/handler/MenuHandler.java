@@ -6,10 +6,12 @@ import com.djonique.cashbackadvbot.bot.FixedDonation;
 import com.djonique.cashbackadvbot.bot.keyboard.KeyboardFactory;
 import com.djonique.cashbackadvbot.bot.state.DialogState;
 import com.djonique.cashbackadvbot.config.ReferralProperties;
+import com.djonique.cashbackadvbot.dto.ActiveSelectionDto;
 import com.djonique.cashbackadvbot.dto.DonationPromptContext;
 import com.djonique.cashbackadvbot.dto.UserRef;
 import com.djonique.cashbackadvbot.exception.ValidationException;
 import com.djonique.cashbackadvbot.service.PaymentService;
+import com.djonique.cashbackadvbot.service.SelectionService;
 import com.djonique.cashbackadvbot.service.UserService;
 import com.djonique.cashbackadvbot.service.UserStateService;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +21,14 @@ import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.bots.AbsSender;
 
+import java.math.BigDecimal;
+import java.text.Collator;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -32,6 +41,8 @@ public class MenuHandler {
     private static final String EDIT_ERROR_TEXT = "Не удалось обновить меню";
     private static final String CHAT_ERROR_TEXT = "Не удалось определить чат";
     private static final String DONATION_MENU_TEXT = "Ваша поддержка очень важна. Выберите формат:";
+    private static final String SHARE_TEXT =
+            "🤝 Поделитесь ботом с друзьями! Пусть они тоже выбирают карты с умом:";
     private static final String STARS_MENU_TEXT = "Выберите количество звезд для поддержки проекта:";
     private static final String STARS_TITLE = "Донат звездами Telegram";
     private static final String INVALID_AMOUNT_TEXT = "Некорректная сумма";
@@ -46,9 +57,17 @@ public class MenuHandler {
     private static final String NEW_CARD_LINK_TEMPLATE =
             "Для оформления карты %s перейдите по ссылке: %s";
     private static final String UNKNOWN_BANK_TEXT = "Неизвестный банк";
+    private static final String USER_ERROR_TEXT = "Не удалось определить пользователя";
+    private static final String MY_SELECTIONS_TITLE =
+            "📊 Ваши категории кэшбэка на текущий месяц:";
+    private static final String NO_SELECTIONS_TEXT =
+            "У вас пока нет настроенных категорий на этот месяц.\n\n"
+                    + "Нажмите «⚙️ Настроить кэшбэк», чтобы выбрать категории.";
+    private static final String ALL_PURCHASES_SLUG = "all_purchases";
 
     private final UserService userService;
     private final UserStateService userStateService;
+    private final SelectionService selectionService;
     private final KeyboardFactory keyboardFactory;
     private final BotSender botSender;
     private final CallbackSupport callbackSupport;
@@ -68,6 +87,7 @@ public class MenuHandler {
             case "settings" -> setupHandler.openBankSelection(user, chatId);
             case "help" -> helpHandler.sendHelp(chatId);
             case "donate" -> sendDonationMenu(chatId);
+            case "share" -> sendShare(chatId);
             default -> log.warn("Неизвестная команда: {}", command);
         }
     }
@@ -93,9 +113,10 @@ public class MenuHandler {
             case CallbackData.CARD_BY_MCC -> cardSearchHandler.handleCardByMcc(callbackQuery);
             case CallbackData.CARD_BY_STORE -> cardSearchHandler.handleCardByStore(callbackQuery);
             case CallbackData.MENU_SETUP -> setupHandler.handleSetup(callbackQuery);
+            case CallbackData.MENU_MY_SELECTIONS -> showMySelections(callbackQuery);
             case CallbackData.SETUP_DONE -> setupHandler.handleDone(callbackQuery);
             case CallbackData.MENU_NEW_CARD -> showNewCardMenu(callbackQuery);
-            case CallbackData.MENU_DONATE -> showDonationMenu(callbackQuery);
+            case CallbackData.MENU_SUPPORT -> showDonationMenu(callbackQuery);
             case CallbackData.DONATE_STARS -> showStarsMenu(callbackQuery);
             case CallbackData.SUPPORT_100,
                  CallbackData.SUPPORT_250,
@@ -141,6 +162,10 @@ public class MenuHandler {
 
     private void sendDonationMenu(Long chatId) {
         botSender.send(chatId, DONATION_MENU_TEXT, keyboardFactory.getDonationMenuKeyboard());
+    }
+
+    private void sendShare(Long chatId) {
+        botSender.send(chatId, SHARE_TEXT, keyboardFactory.getShareKeyboard());
     }
 
     private void showDonationMenu(CallbackQuery callbackQuery) {
@@ -305,6 +330,64 @@ public class MenuHandler {
             return;
         }
         botSender.answerCallback(callbackQuery.getId(), null);
+    }
+
+    private void showMySelections(CallbackQuery callbackQuery) {
+        UserRef user = callbackSupport.resolveUser(callbackQuery);
+        if (user == null) {
+            botSender.answerCallback(callbackQuery.getId(), USER_ERROR_TEXT);
+            return;
+        }
+
+        List<ActiveSelectionDto> selections = selectionService.getActiveSelections(user.id());
+        if (!callbackSupport.editOrSend(callbackQuery, buildMySelectionsText(selections),
+                keyboardFactory.getBackToMainKeyboard())) {
+            botSender.answerCallback(callbackQuery.getId(), EDIT_ERROR_TEXT);
+            return;
+        }
+        botSender.answerCallback(callbackQuery.getId(), null);
+    }
+
+    /*
+     * Группирует настройки по банку. Внутри банка «Все покупки» всегда первая,
+     * остальные категории — по алфавиту локальных названий (Collator для русского).
+     * Порядок банков тоже алфавитный, чтобы сообщение было стабильным.
+     */
+    static String buildMySelectionsText(List<ActiveSelectionDto> selections) {
+        if (selections == null || selections.isEmpty()) {
+            return NO_SELECTIONS_TEXT;
+        }
+
+        Collator collator = Collator.getInstance(Locale.of("ru", "RU"));
+        Comparator<ActiveSelectionDto> categoryOrder = Comparator
+                .comparing((ActiveSelectionDto selection) -> !isAllPurchases(selection))
+                .thenComparing(ActiveSelectionDto::categoryName, collator);
+
+        Map<String, List<ActiveSelectionDto>> byBank = selections.stream()
+                .collect(Collectors.groupingBy(ActiveSelectionDto::bankName));
+
+        StringBuilder text = new StringBuilder(MY_SELECTIONS_TITLE);
+        byBank.keySet().stream()
+                .sorted(collator)
+                .forEach(bankName -> {
+                    text.append("\n\n🏦 ").append(bankName).append(':');
+                    byBank.get(bankName).stream()
+                            .sorted(categoryOrder)
+                            .forEach(selection -> text.append("\n• ")
+                                    .append(selection.categoryName())
+                                    .append(" — ")
+                                    .append(formatPercent(selection.percent()))
+                                    .append('%'));
+                });
+        return text.toString();
+    }
+
+    private static boolean isAllPurchases(ActiveSelectionDto selection) {
+        return ALL_PURCHASES_SLUG.equals(selection.categorySlug());
+    }
+
+    private static String formatPercent(BigDecimal percent) {
+        return percent == null ? "?" : percent.stripTrailingZeros().toPlainString();
     }
 
     private record BankOffer(String name, String url) {

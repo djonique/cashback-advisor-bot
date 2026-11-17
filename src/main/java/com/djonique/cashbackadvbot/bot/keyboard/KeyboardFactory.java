@@ -14,6 +14,9 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.text.Collator;
+import java.time.YearMonth;
+import java.time.ZoneId;
+import java.time.format.TextStyle;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -23,23 +26,50 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class KeyboardFactory {
 
-    public static final String URL = "https://t.me/share/url?url=https://t.me/%s&text=%s";
-    private static final String SHARE_TEXT =
-            "Узнай, какой картой выгоднее оплатить покупку, и получай максимальный кешбэк!";
+    private static final String SHARE_URL_TEMPLATE =
+            "https://t.me/share/url?url=https://t.me/%s&text=%s";
+    private static final String SHARE_INVITE_TEXT =
+            "Попробуй этого бота для выбора кешбэка!";
+    private static final String SHARE_BUTTON_TEXT = "Отправить друзьям";
     private static final String ALL_PURCHASES_SLUG = "all_purchases";
     private static final Set<String> ALL_PURCHASES_NAMES =
             Set.of("Все покупки", "На все покупки", "На все", "На всё");
+    private static final String MY_SELECTIONS_PREFIX = "📋 Мои настройки на ";
+    private static final ZoneId MOSCOW_ZONE = ZoneId.of("Europe/Moscow");
     private final BotProperties botProperties;
 
     public InlineKeyboardMarkup getMainMenuKeyboard() {
         return InlineKeyboardMarkup.builder()
                 .keyboardRow(List.of(button("💳 " + BotButtons.CHOOSE_CARD, CallbackData.MENU_CHOOSE)))
+                .keyboardRow(List.of(button(
+                        MY_SELECTIONS_PREFIX + currentMonthName(), CallbackData.MENU_MY_SELECTIONS)))
                 .keyboardRow(List.of(button("⚙️ " + BotButtons.SETUP, CallbackData.MENU_SETUP)))
                 .keyboardRow(List.of(button("💎 " + BotButtons.NEW_CARD, CallbackData.MENU_NEW_CARD)))
-                .keyboardRow(List.of(button("❤️ " + BotButtons.SUPPORT, CallbackData.MENU_DONATE)))
-                .keyboardRow(List.of(urlButton("🤝 " + BotButtons.SHARE, buildShareUrl())))
+                .keyboardRow(List.of(button("❤️ " + BotButtons.SUPPORT, CallbackData.MENU_SUPPORT)))
                 .keyboardRow(List.of(button("🆘 " + BotButtons.HELP, CallbackData.MENU_HELP)))
                 .build();
+    }
+
+    /*
+     * Клавиатура команды /share: одна URL-кнопка, открывающая системный
+     * диалог «Поделиться» Telegram. Из главного меню кнопка убрана.
+     */
+    public InlineKeyboardMarkup getShareKeyboard() {
+        return InlineKeyboardMarkup.builder()
+                .keyboardRow(List.of(urlButton(SHARE_BUTTON_TEXT, buildShareUrl())))
+                .build();
+    }
+
+    /*
+     * Название месяца берём по Москве: именно по этой зоне SelectionService
+     * определяет текущий год-месяц для настроек кешбэка.
+     */
+    private String currentMonthName() {
+        Locale russian = Locale.of("ru");
+        return YearMonth.now(MOSCOW_ZONE)
+                .getMonth()
+                .getDisplayName(TextStyle.FULL_STANDALONE, russian)
+                .toLowerCase(russian);
     }
 
     public InlineKeyboardMarkup getBackToMainKeyboard() {
@@ -111,7 +141,7 @@ public class KeyboardFactory {
                         button("25 ⭐️", CallbackData.DONATE_STAR_PREFIX + 25),
                         button("50 ⭐️", CallbackData.DONATE_STAR_PREFIX + 50),
                         button("100 ⭐️", CallbackData.DONATE_STAR_PREFIX + 100)))
-                .keyboardRow(List.of(button("🔙 " + BotButtons.BACK, CallbackData.MENU_DONATE)))
+                .keyboardRow(List.of(button("🔙 " + BotButtons.BACK, CallbackData.MENU_SUPPORT)))
                 .build();
     }
 
@@ -177,8 +207,8 @@ public class KeyboardFactory {
 
     private String buildShareUrl() {
         return String.format(
-                URL,
+                SHARE_URL_TEMPLATE,
                 botProperties.getBotUsername(),
-                URLEncoder.encode(SHARE_TEXT, StandardCharsets.UTF_8));
+                URLEncoder.encode(SHARE_INVITE_TEXT, StandardCharsets.UTF_8));
     }
 }

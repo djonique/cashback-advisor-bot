@@ -400,6 +400,7 @@ public class CashbackTelegramBot extends TelegramLongPollingBot {
             case "/settings", BotButtons.SETUP -> "settings";
             case "/help", BotButtons.HELP -> "help";
             case "/donate", BotButtons.SUPPORT -> "donate";
+            case "/share" -> "share";
             default -> null;
         };
     }

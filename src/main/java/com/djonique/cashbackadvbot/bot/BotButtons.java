@@ -7,7 +7,6 @@ public final class BotButtons {
     public static final String SETUP = "Настроить кешбэк";
     public static final String NEW_CARD = "Оформить новую карту";
     public static final String SUPPORT = "Поддержать проект";
-    public static final String SHARE = "Поделиться ботом";
     public static final String HELP = "Помощь";
 
     public static final String CARD_BY_STORE = "По названию магазина";
