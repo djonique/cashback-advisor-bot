@@ -2,7 +2,9 @@ package com.djonique.cashbackadvbot.service;
 
 import com.djonique.cashbackadvbot.bot.TelegramApiExecutor;
 import com.djonique.cashbackadvbot.config.PaymentProperties;
+import com.djonique.cashbackadvbot.domain.PaymentInbox;
 import com.djonique.cashbackadvbot.domain.PaymentInvoice;
+import com.djonique.cashbackadvbot.dto.UserRef;
 import com.djonique.cashbackadvbot.repository.PaymentInvoiceRepository;
 import com.djonique.cashbackadvbot.repository.PaymentRepository;
 import com.djonique.cashbackadvbot.util.LogUtils;
@@ -33,6 +35,7 @@ public class PaymentService {
     private final PaymentProperties paymentProperties;
     private final PaymentRepository paymentRepository;
     private final PaymentInvoiceRepository paymentInvoiceRepository;
+    private final UserService userService;
     private final TelegramApiExecutor telegramApiExecutor;
 
     public boolean sendFiatInvoice(Long chatId, String title, int amountRub, AbsSender sender) {
@@ -141,6 +144,29 @@ public class PaymentService {
             }
         }
         return true;
+    }
+
+    /*
+     * Обрабатывает платёж из inbox: находит/создаёт пользователя и идемпотентно
+     * записывает платёж. Возвращает true, только если платёж записан впервые.
+     * Идемпотентность держится на UNIQUE (telegram_payment_charge_id).
+     *
+     * @Transactional обязателен: registerPayment вызывается изнутри бина,
+     * поэтому его собственная аннотация (self-invocation) не сработает, а
+     * native insert ... on conflict требует активной транзакции.
+     */
+    @Transactional
+    public boolean processPayment(PaymentInbox payment) {
+        UserRef user = userService.findOrCreate(
+                payment.getTelegramChatId(), payment.getUsername());
+
+        return registerPayment(
+                user.id(),
+                payment.getTelegramChargeId(),
+                payment.getProviderChargeId(),
+                payment.getAmount(),
+                payment.getCurrency(),
+                payment.getInvoicePayload());
     }
 
     private PaymentInvoice createInvoice(Long chatId, String payload, long amount, String currency) {

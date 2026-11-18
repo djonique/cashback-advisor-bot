@@ -9,8 +9,11 @@ services:
     image: postgres:16-alpine
     container_name: cashback-postgres
     restart: always
-    ports:
-      - "5432:5432"
+    # Порт наружу не публикуем: БД доступна только контейнерам этой compose-сети.
+    # Для админского доступа используйте `docker compose exec postgres psql ...`
+    # или SSH-туннель через `docker compose exec`.
+    expose:
+      - "5432"
     environment:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}

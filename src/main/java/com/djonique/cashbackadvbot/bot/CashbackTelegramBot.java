@@ -5,7 +5,9 @@ import com.djonique.cashbackadvbot.bot.handler.MenuHandler;
 import com.djonique.cashbackadvbot.bot.handler.SetupDialogHandler;
 import com.djonique.cashbackadvbot.bot.state.DialogState;
 import com.djonique.cashbackadvbot.config.BotProperties;
+import com.djonique.cashbackadvbot.domain.PaymentInbox;
 import com.djonique.cashbackadvbot.dto.UserRef;
+import com.djonique.cashbackadvbot.service.PaymentInboxService;
 import com.djonique.cashbackadvbot.service.PaymentService;
 import com.djonique.cashbackadvbot.service.UserService;
 import com.djonique.cashbackadvbot.service.UserStateService;
@@ -36,12 +38,7 @@ public class CashbackTelegramBot extends TelegramLongPollingBot {
     private static final String PAYMENT_PENDING_TEXT =
             "Платёж получен, но пока не обработан. Мы уже разбираемся — спасибо за поддержку! ❤️";
     private static final String PRIVATE_ONLY_TEXT = "Бот работает только в личных сообщениях";
-    private static final String RUB_CURRENCY = "RUB";
-    private static final String STARS_CURRENCY = "XTR";
     private static final String PRIVATE_CHAT_TYPE = "private";
-    private static final String PAYMENT_THANKS_RUB_TEMPLATE =
-            "Спасибо за поддержку! ❤️ (ID транзакции: %s)";
-    private static final String PAYMENT_THANKS_STARS_TEXT = "Спасибо за поддержку! ❤️";
     private static final String DONATION_AMOUNT_INVALID_TEXT =
             "Пожалуйста, введите целое число (например, 150):";
     private static final String DONATION_AMOUNT_TOO_SMALL_TEXT =
@@ -50,11 +47,13 @@ public class CashbackTelegramBot extends TelegramLongPollingBot {
             "Максимальная сумма доната — 100 000 ₽. Введите сумму поменьше.";
     private static final int DONATION_MIN_AMOUNT = 100;
     private static final int DONATION_MAX_AMOUNT = 100_000;
+    // Повторы нужны только для записи в inbox: дальше работает fallback-джоба.
     private static final int PAYMENT_RETRY_ATTEMPTS = 3;
     private static final long PAYMENT_RETRY_DELAY_MS = 200L;
     private static final int WORKER_THREADS = 4;
     private static final int WORKER_QUEUE_CAPACITY = 10_000;
     private static final int CHAT_LANES = 32;
+    private static final int CHAT_QUEUE_CAPACITY = 64;
 
     private final BotProperties botProperties;
     private final MenuHandler menuHandler;
@@ -63,6 +62,8 @@ public class CashbackTelegramBot extends TelegramLongPollingBot {
     private final UserService userService;
     private final UserStateService userStateService;
     private final PaymentService paymentService;
+    private final PaymentInboxService paymentInboxService;
+    private final PaymentNotifier paymentNotifier;
     private final TelegramMessageSender messageSender;
     private final TelegramApiExecutor telegramApiExecutor;
 
@@ -79,6 +80,8 @@ public class CashbackTelegramBot extends TelegramLongPollingBot {
             UserService userService,
             UserStateService userStateService,
             PaymentService paymentService,
+            PaymentInboxService paymentInboxService,
+            PaymentNotifier paymentNotifier,
             TelegramMessageSender messageSender,
             TelegramApiExecutor telegramApiExecutor) {
         super(botProperties.getBotToken());
@@ -89,6 +92,8 @@ public class CashbackTelegramBot extends TelegramLongPollingBot {
         this.userService = userService;
         this.userStateService = userStateService;
         this.paymentService = paymentService;
+        this.paymentInboxService = paymentInboxService;
+        this.paymentNotifier = paymentNotifier;
         this.messageSender = messageSender;
         this.telegramApiExecutor = telegramApiExecutor;
         this.messageSender.bind(this);
@@ -100,9 +105,22 @@ public class CashbackTelegramBot extends TelegramLongPollingBot {
                 new ArrayBlockingQueue<>(WORKER_QUEUE_CAPACITY),
                 Thread.ofPlatform().name("bot-worker-", 0).daemon().factory(),
                 new ThreadPoolExecutor.CallerRunsPolicy());
+        /*
+         * Полосы на чат: сохраняют порядок апдейтов одного чата.
+         * Очередь ограничена, чтобы всплеск сообщений не привёл к OOM.
+         * При переполнении задачу отбрасываем: блокировать общий поток
+         * получения апдейтов нельзя — это остановит обработку всех чатов.
+         */
         this.chatLanes = IntStream.range(0, CHAT_LANES)
-                .mapToObj(i -> Executors.newSingleThreadExecutor(
-                        Thread.ofPlatform().name("bot-chat-" + i).daemon().factory()))
+                .mapToObj(i -> new ThreadPoolExecutor(
+                        1,
+                        1,
+                        0L,
+                        TimeUnit.MILLISECONDS,
+                        new ArrayBlockingQueue<>(CHAT_QUEUE_CAPACITY),
+                        Thread.ofPlatform().name("bot-chat-" + i).daemon().factory(),
+                        (task, executor) -> log.warn(
+                                "Очередь чата переполнена, update отброшен: lane={}", i)))
                 .toArray(ExecutorService[]::new);
     }
 
@@ -216,85 +234,89 @@ public class CashbackTelegramBot extends TelegramLongPollingBot {
         }
     }
 
+    /*
+     * Inbox-first: сначала фиксируем факт оплаты в payment_inbox, и только потом
+     * трогаем бизнес-данные. Если запись в inbox не удалась — деньги Telegram уже
+     * списал, поэтому пишем CRITICAL и честно сообщаем пользователю о задержке.
+     */
     private void handleSuccessfulPayment(Message message) {
         SuccessfulPayment payment = message.getSuccessfulPayment();
+        long totalAmount = payment.getTotalAmount() == null ? 0L : payment.getTotalAmount();
         log.info("Успешный платёж: chatId={}, totalAmount={}, currency={}",
-                LogUtils.maskChatId(message.getChatId()),
-                payment.getTotalAmount(), payment.getCurrency());
+                LogUtils.maskChatId(message.getChatId()), totalAmount, payment.getCurrency());
 
-        UserRef user = resolveUserWithRetry(message.getChatId(), username(message));
-        if (user == null) {
+        PaymentInbox inbox = saveToInbox(message, payment, totalAmount);
+        if (inbox == null) {
+            messageSender.send(message.getChatId(), PAYMENT_PENDING_TEXT, null);
             return;
         }
-        long totalAmount = payment.getTotalAmount() == null ? 0L : payment.getTotalAmount();
-        boolean processed = persistPayment(user, payment, totalAmount);
-        if (!processed) {
+
+        boolean registered;
+        try {
+            registered = paymentService.processPayment(inbox);
+        } catch (RuntimeException e) {
+            // processed_at останется NULL — платёж подберёт PaymentInboxProcessor.
+            log.error("Платёж в inbox есть, но не обработан; повторит фолбэк-джоба: " +
+                            "id={}, chargeId={}: {}",
+                    inbox.getId(), inbox.getTelegramChargeId(), LogUtils.sanitize(e));
+            messageSender.send(message.getChatId(), PAYMENT_PENDING_TEXT, null);
+            return;
+        }
+
+        try {
+            paymentInboxService.markProcessed(inbox.getId());
+        } catch (RuntimeException e) {
+            // Деньги уже учтены; просроченную отметку снимет фолбэк-джоба.
+            log.error("Не удалось отметить платёж обработанным: id={}, chargeId={}: {}",
+                    inbox.getId(), inbox.getTelegramChargeId(), LogUtils.sanitize(e));
+        }
+
+        if (registered) {
+            paymentNotifier.sendThanks(message.getChatId(), payment.getCurrency(),
+                    payment.getTelegramPaymentChargeId());
+        } else {
             log.info("Повторный или отложенный successful_payment: chatId={}, chargeId={}",
                     LogUtils.maskChatId(message.getChatId()),
                     payment.getTelegramPaymentChargeId());
-            return;
-        }
-
-        if (RUB_CURRENCY.equals(payment.getCurrency())) {
-            String text = String.format(PAYMENT_THANKS_RUB_TEMPLATE,
-                    payment.getTelegramPaymentChargeId());
-            messageSender.send(message.getChatId(), text, null);
-        } else if (STARS_CURRENCY.equals(payment.getCurrency())) {
-            messageSender.send(message.getChatId(), PAYMENT_THANKS_STARS_TEXT, null);
-        } else {
-            log.warn("Неизвестная валюта успешного платежа: chatId={}, currency={}",
-                    LogUtils.maskChatId(message.getChatId()), payment.getCurrency());
         }
     }
 
-    private UserRef resolveUserWithRetry(Long chatId, String username) {
+    /*
+     * Идемпотентная запись в inbox (insert ... on conflict do nothing).
+     * Повтор — только здесь: если упала БД, лучший шанс сохранить платёж —
+     * короткая серия повторов прямо сейчас, а не через минуту.
+     */
+    private PaymentInbox saveToInbox(Message message, SuccessfulPayment payment, long totalAmount) {
+        String chargeId = payment.getTelegramPaymentChargeId();
         for (int attempt = 1; attempt <= PAYMENT_RETRY_ATTEMPTS; attempt++) {
             try {
-                return userService.findOrCreate(chatId, username);
-            } catch (RuntimeException e) {
-                log.error("Не удалось определить пользователя платежа (попытка {}/{}): chatId={}: {}",
-                        attempt, PAYMENT_RETRY_ATTEMPTS,
-                        LogUtils.maskChatId(chatId), LogUtils.sanitize(e));
-                if (attempt < PAYMENT_RETRY_ATTEMPTS) {
-                    sleepQuietly();
-                }
-            }
-        }
-        log.error("КРИТИЧНО: платёж не сохранён — не удалось определить пользователя: chatId={}",
-                LogUtils.maskChatId(chatId));
-        messageSender.send(chatId, PAYMENT_PENDING_TEXT, null);
-        return null;
-    }
-
-    private boolean persistPayment(UserRef user, SuccessfulPayment payment, long totalAmount) {
-        for (int attempt = 1; attempt <= PAYMENT_RETRY_ATTEMPTS; attempt++) {
-            try {
-                return paymentService.registerPayment(
-                        user.id(),
-                        payment.getTelegramPaymentChargeId(),
+                return paymentInboxService.save(
+                        message.getChatId(),
+                        username(message),
+                        chargeId,
                         payment.getProviderPaymentChargeId(),
                         totalAmount,
                         payment.getCurrency(),
                         payment.getInvoicePayload());
             } catch (RuntimeException e) {
-                log.error("Не удалось сохранить платёж (попытка {}/{}): chatId={}, chargeId={}: {}",
+                log.error("Не удалось записать платёж в inbox (попытка {}/{}): chatId={}, chargeId={}: {}",
                         attempt, PAYMENT_RETRY_ATTEMPTS,
-                        LogUtils.maskChatId(user.telegramChatId()),
-                        payment.getTelegramPaymentChargeId(), LogUtils.sanitize(e));
+                        LogUtils.maskChatId(message.getChatId()), chargeId, LogUtils.sanitize(e));
                 if (attempt < PAYMENT_RETRY_ATTEMPTS) {
                     sleepQuietly();
                 }
             }
         }
-        // Деньги уже списаны Telegram — не пугаем пользователя и не теряем факт оплаты.
-        log.error("КРИТИЧНО: платёж не сохранён после {} попыток: chatId={}, chargeId={}, amount={}, currency={}",
+        // Худший сценарий: факт оплаты есть только в Telegram — нужна ручная сверка.
+        log.error("КРИТИЧНО: платёж не попал в payment_inbox после {} попыток — " +
+                        "сверьте вручную в Telegram: chatId={}, chargeId={}, amount={}, currency={}, payload={}",
                 PAYMENT_RETRY_ATTEMPTS,
-                LogUtils.maskChatId(user.telegramChatId()),
-                payment.getTelegramPaymentChargeId(),
+                LogUtils.maskChatId(message.getChatId()),
+                chargeId,
                 totalAmount,
-                payment.getCurrency());
-        messageSender.send(user.telegramChatId(), PAYMENT_PENDING_TEXT, null);
-        return false;
+                payment.getCurrency(),
+                payment.getInvoicePayload());
+        return null;
     }
 
     private void sleepQuietly() {

@@ -2,7 +2,9 @@ package com.djonique.cashbackadvbot.service;
 
 import com.djonique.cashbackadvbot.bot.TelegramApiExecutor;
 import com.djonique.cashbackadvbot.config.PaymentProperties;
+import com.djonique.cashbackadvbot.domain.PaymentInbox;
 import com.djonique.cashbackadvbot.domain.PaymentInvoice;
+import com.djonique.cashbackadvbot.dto.UserRef;
 import com.djonique.cashbackadvbot.repository.PaymentInvoiceRepository;
 import com.djonique.cashbackadvbot.repository.PaymentRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,6 +34,9 @@ class PaymentServiceTest {
     @Mock
     private PaymentInvoiceRepository paymentInvoiceRepository;
 
+    @Mock
+    private UserService userService;
+
     private PaymentService paymentService;
 
     @BeforeEach
@@ -40,6 +45,7 @@ class PaymentServiceTest {
                 new PaymentProperties("live-provider-token"),
                 paymentRepository,
                 paymentInvoiceRepository,
+                userService,
                 new TelegramApiExecutor());
     }
 
@@ -165,6 +171,29 @@ class PaymentServiceTest {
                 1L, "tg-charge", "provider-charge", 10_000L, "RUB", "payload-1")).isFalse();
 
         verify(paymentInvoiceRepository, never()).markPaid(any(), any(), any(), any());
+    }
+
+    @Test
+    void shouldProcessInboxPaymentThroughUserResolution() {
+        PaymentInbox inbox = new PaymentInbox();
+        inbox.setTelegramChatId(123L);
+        inbox.setUsername("john");
+        inbox.setTelegramChargeId("tg-charge");
+        inbox.setProviderChargeId("provider-charge");
+        inbox.setAmount(10_000L);
+        inbox.setCurrency("RUB");
+        inbox.setInvoicePayload("payload-1");
+
+        when(userService.findOrCreate(123L, "john")).thenReturn(new UserRef(1L, 123L));
+        when(paymentRepository.insertIfAbsent(
+                1L, "tg-charge", "provider-charge", "payload-1", 10_000L, "RUB"))
+                .thenReturn(1);
+
+        assertThat(paymentService.processPayment(inbox)).isTrue();
+
+        verify(paymentInvoiceRepository).markPaid(
+                eq("payload-1"), eq(PaymentInvoice.STATUS_PAID),
+                eq(PaymentInvoice.STATUS_CREATED), any());
     }
 
     private void stubSavedInvoice() {
