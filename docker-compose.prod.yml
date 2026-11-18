@@ -12,8 +12,8 @@ services:
     # Порт наружу не публикуем: БД доступна только контейнерам этой compose-сети.
     # Для админского доступа используйте `docker compose exec postgres psql ...`
     # или SSH-туннель через `docker compose exec`.
-    expose:
-      - "5432"
+    ports:
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
