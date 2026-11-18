@@ -7,6 +7,8 @@ DEPLOY.md
 SHARE_BOT.md
 target/
 .mvn/wrapper/maven-wrapper.jar
+*.dump
+backup*/
 
 ### Environment ###
 .env

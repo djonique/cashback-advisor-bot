@@ -16,7 +16,7 @@ class MySelectionsHandlerTest {
     void shouldReportNoSelections_whenNothingConfigured() {
         assertThat(MySelectionsHandler.buildMySelectionsText(List.of()))
                 .isEqualTo("У вас пока нет настроенных категорий на этот месяц.\n\n"
-                        + "Нажмите «⚙️ Настроить кэшбэк», чтобы выбрать категории.");
+                        + "Нажмите «⚙️ Настроить кешбэк», чтобы выбрать категории.");
     }
 
     @Test
@@ -29,7 +29,7 @@ class MySelectionsHandlerTest {
                 selection("Т-Банк", "all_purchases", "Все покупки", "1.00"));
 
         assertThat(MySelectionsHandler.buildMySelectionsText(selections))
-                .isEqualTo("📊 Ваши категории кэшбэка на текущий месяц:\n\n"
+                .isEqualTo("📊 Ваши категории кешбэка на текущий месяц:\n\n"
                         + "🏦 Сбербанк:\n"
                         + "• Все покупки — 1%\n"
                         + "• Аптеки — 5%\n"

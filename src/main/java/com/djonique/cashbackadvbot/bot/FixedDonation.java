@@ -8,8 +8,8 @@ import java.util.Optional;
 @Getter
 public enum FixedDonation {
 
-    SERVER(100, "🖥 На сервер (100 ₽)", CallbackData.SUPPORT_100),
-    DEPOSIT(250, "💵 На додеп (250 ₽)", CallbackData.SUPPORT_250),
+    DEPOSIT(100, "💵 На додеп (100 ₽)", CallbackData.SUPPORT_100),
+    SERVER(250, "🖥 На сервер (250 ₽)", CallbackData.SUPPORT_250),
     CATS(500, "😻 На котят (500 ₽)", CallbackData.SUPPORT_500);
 
     private final int amountRub;

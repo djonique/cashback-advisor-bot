@@ -18,8 +18,13 @@ import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 @Slf4j
 public class NewCardHandler {
 
-    private static final String NEW_CARD_MENU_TEXT =
-            "Выберите банк, в котором Вы хотите оформить новую карту:";
+    private static final String NEW_CARD_MENU_TEXT = """
+            💰 Получите до 1000 ₽ на счет, повышенный кешбэк или бесплатное обслуживание при оформлении новой карты.
+            
+            Условия получения бонусов индивидуальны и доступны по реферальной ссылке ⬇️
+            
+            Выберите банк, в котором вы хотите оформить новую карту:
+            """;
     private static final String NEW_CARD_LINK_TEMPLATE =
             "Для оформления карты %s перейдите по ссылке: %s";
     private static final String UNKNOWN_BANK_TEXT = "Неизвестный банк";

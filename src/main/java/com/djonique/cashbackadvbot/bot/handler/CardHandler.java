@@ -25,7 +25,7 @@ public class CardHandler {
     private static final String INVALID_MCC_TEXT =
             "Ошибка: MCC-код должен состоять из 4 цифр. Попробуйте еще раз.";
     private static final String NOT_FOUND_TEXT =
-            "Я не нашел карт, подходящих под Ваш запрос.";
+            "Я не нашел карт, подходящих под ваш запрос.";
     private static final String[] MEDALS = {"🥇", "🥈", "🥉"};
     private static final int MAX_INPUT_DISPLAY_LENGTH = 100;
 

@@ -72,7 +72,7 @@ class CardHandlerTest {
 
         verify(userStateService).clearState(1L);
         verify(botSender).send(eq(user.telegramChatId()),
-                eq("Я не нашел карт, подходящих под Ваш запрос."), any());
+                eq("Я не нашел карт, подходящих под ваш запрос."), any());
     }
 
     @Test

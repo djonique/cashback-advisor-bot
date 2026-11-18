@@ -30,10 +30,10 @@ import java.util.stream.Collectors;
 public class MySelectionsHandler {
 
     private static final String MY_SELECTIONS_TITLE =
-            "📊 Ваши категории кэшбэка на текущий месяц:";
+            "📊 Ваши категории кешбэка на текущий месяц:";
     private static final String NO_SELECTIONS_TEXT =
             "У вас пока нет настроенных категорий на этот месяц.\n\n"
-                    + "Нажмите «⚙️ Настроить кэшбэк», чтобы выбрать категории.";
+                    + "Нажмите «⚙️ Настроить кешбэк», чтобы выбрать категории.";
     private static final String ALL_PURCHASES_SLUG = "all_purchases";
 
     private final BotSender botSender;

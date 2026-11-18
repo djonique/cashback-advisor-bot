@@ -15,7 +15,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMa
 @Slf4j
 public class HelpHandler {
 
-    private static final String HELP_MENU_TEXT = "Выберите интересующий Вас раздел:";
+    private static final String HELP_MENU_TEXT = "Выберите интересующий вас раздел:";
 
     private static final String HELP_GENERAL_TEXT = """
             🤖 Как пользоваться ботом:
@@ -30,7 +30,7 @@ public class HelpHandler {
             3. По названию магазина — самый неточный вариант: зависит от настроек терминала в конкретном магазине.
             
             ⚠️ ВАЖНО!
-            Бот не хранит данные Ваших карт и не имеет доступа к Вашим счетам.""";
+            Бот не хранит данные ваших карт и не имеет доступа к вашим счетам.""";
 
     private static final String HELP_SETUP_TEXT = """
             ⚙️ Как настроить кешбэк:
