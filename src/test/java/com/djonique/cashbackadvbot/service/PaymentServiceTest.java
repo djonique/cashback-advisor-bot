@@ -17,6 +17,9 @@ import org.telegram.telegrambots.meta.api.methods.invoices.SendInvoice;
 import org.telegram.telegrambots.meta.bots.AbsSender;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
+import java.time.Duration;
+import java.time.Instant;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -194,6 +197,25 @@ class PaymentServiceTest {
         verify(paymentInvoiceRepository).markPaid(
                 eq("payload-1"), eq(PaymentInvoice.STATUS_PAID),
                 eq(PaymentInvoice.STATUS_CREATED), any());
+    }
+
+    @Test
+    void shouldExpireCreatedInvoicesOlderThan24Hours() {
+        when(paymentInvoiceRepository.expireCreatedBefore(
+                any(Instant.class), eq(PaymentInvoice.STATUS_EXPIRED),
+                eq(PaymentInvoice.STATUS_CREATED))).thenReturn(3);
+
+        paymentService.expireStaleInvoices();
+
+        ArgumentCaptor<Instant> threshold = ArgumentCaptor.forClass(Instant.class);
+        verify(paymentInvoiceRepository).expireCreatedBefore(
+                threshold.capture(), eq(PaymentInvoice.STATUS_EXPIRED),
+                eq(PaymentInvoice.STATUS_CREATED));
+
+        Instant now = Instant.now();
+        assertThat(threshold.getValue())
+                .isAfter(now.minus(Duration.ofHours(24)).minusSeconds(5))
+                .isBefore(now.minus(Duration.ofHours(24)).plusSeconds(5));
     }
 
     private void stubSavedInvoice() {

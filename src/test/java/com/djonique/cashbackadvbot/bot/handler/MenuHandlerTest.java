@@ -1,9 +1,11 @@
 package com.djonique.cashbackadvbot.bot.handler;
 
 import com.djonique.cashbackadvbot.dto.ActiveSelectionDto;
+import com.djonique.cashbackadvbot.util.TextLimiter;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -35,6 +37,20 @@ class MenuHandlerTest {
                         + "🏦 Т-Банк:\n"
                         + "• Все покупки — 1%\n"
                         + "• Рестораны — 7%");
+    }
+
+    @Test
+    void shouldTruncateLongSelectionsText_toTelegramLimit() {
+        List<ActiveSelectionDto> selections = new ArrayList<>();
+        for (int i = 0; i < 300; i++) {
+            selections.add(new ActiveSelectionDto(1L, "Банк " + i, 10L,
+                    "slug" + i, "Очень длинное название категории " + i, new BigDecimal("5")));
+        }
+
+        String text = MenuHandler.buildMySelectionsText(selections);
+
+        assertThat(text).hasSize(TextLimiter.TELEGRAM_MAX_LENGTH);
+        assertThat(text).endsWith("…");
     }
 
     private ActiveSelectionDto selection(String bankName, String slug, String categoryName,

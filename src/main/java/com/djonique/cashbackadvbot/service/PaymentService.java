@@ -10,6 +10,7 @@ import com.djonique.cashbackadvbot.repository.PaymentRepository;
 import com.djonique.cashbackadvbot.util.LogUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.telegram.telegrambots.meta.api.methods.invoices.SendInvoice;
@@ -17,6 +18,7 @@ import org.telegram.telegrambots.meta.api.objects.payments.LabeledPrice;
 import org.telegram.telegrambots.meta.bots.AbsSender;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -31,6 +33,8 @@ public class PaymentService {
     private static final String STARS_CURRENCY = "XTR";
     private static final String STARS_PROVIDER_TOKEN = "xtr";
     private static final String STARS_PRICE_LABEL = "Донат";
+    // Неоплаченный счёт живёт сутки, затем джоба помечает его EXPIRED.
+    private static final Duration INVOICE_TTL = Duration.ofHours(24);
 
     private final PaymentProperties paymentProperties;
     private final PaymentRepository paymentRepository;
@@ -118,6 +122,26 @@ public class PaymentService {
     }
 
     /*
+     * Раз в сутки закрываем брошенные корзины: счёт CREATED старше 24 часов
+     * больше не должен подтверждаться в PreCheckoutQuery. Так таблица не
+     * растёт бесконечно, а пользователь не оплатит «просроченный» счёт.
+     *
+     * @Transactional нужен для bulk update через @Modifying.
+     */
+    @Scheduled(cron = "0 15 3 * * *", zone = "Europe/Moscow")
+    @Transactional
+    public void expireStaleInvoices() {
+        Instant threshold = Instant.now().minus(INVOICE_TTL);
+        int expired = paymentInvoiceRepository.expireCreatedBefore(
+                threshold, PaymentInvoice.STATUS_EXPIRED, PaymentInvoice.STATUS_CREATED);
+        if (expired > 0) {
+            log.info("Помечено просроченными счетов: {} (созданы раньше {})", expired, threshold);
+        } else {
+            log.debug("Просроченных счетов нет");
+        }
+    }
+
+    /*
      * Атомарно сохраняет платёж. Возвращает false, если платёж с таким
      * telegram_payment_charge_id уже был обработан (повторная доставка update).
      */
@@ -140,7 +164,7 @@ public class PaymentService {
                     PaymentInvoice.STATUS_CREATED,
                     Instant.now());
             if (updated == 0) {
-                log.warn("Счёт не найден или уже оплачен: payload={}", invoicePayload);
+                log.warn("Счёт не найден, уже оплачен или истёк: payload={}", invoicePayload);
             }
         }
         return true;

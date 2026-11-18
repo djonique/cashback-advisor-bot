@@ -14,6 +14,7 @@ import com.djonique.cashbackadvbot.service.PaymentService;
 import com.djonique.cashbackadvbot.service.SelectionService;
 import com.djonique.cashbackadvbot.service.UserService;
 import com.djonique.cashbackadvbot.service.UserStateService;
+import com.djonique.cashbackadvbot.util.TextLimiter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -379,7 +380,8 @@ public class MenuHandler {
                                     .append(formatPercent(selection.percent()))
                                     .append('%'));
                 });
-        return text.toString();
+        // Telegram отклоняет сообщения длиннее 4096 символов.
+        return TextLimiter.truncate(text.toString());
     }
 
     private static boolean isAllPurchases(ActiveSelectionDto selection) {

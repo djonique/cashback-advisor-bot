@@ -7,6 +7,7 @@ import com.djonique.cashbackadvbot.dto.RecommendationDto;
 import com.djonique.cashbackadvbot.dto.UserRef;
 import com.djonique.cashbackadvbot.service.CashbackAdvisorService;
 import com.djonique.cashbackadvbot.service.UserStateService;
+import com.djonique.cashbackadvbot.util.TextLimiter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -15,6 +16,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -87,6 +89,23 @@ class CardHandlerTest {
         assertThat(text.getValue())
                 .contains("🥇 Bank1 — 5% (Супермаркеты)")
                 .contains("🥈 Bank2 — 3% (Продукты)");
+    }
+
+    @Test
+    void shouldTruncateLongRecommendationsText_toTelegramLimit() {
+        UserRef user = user();
+        List<RecommendationDto> many = new ArrayList<>();
+        for (int i = 0; i < 500; i++) {
+            many.add(new RecommendationDto("Bank" + i,
+                    "Очень длинное название категории " + i, new BigDecimal("5")));
+        }
+        when(cashbackAdvisorService.recommend(1L, "5411")).thenReturn(many);
+
+        handler.handleInput(user, "5411", DialogState.CARD_INPUT_MCC);
+
+        ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
+        verify(botSender).send(any(), text.capture(), any());
+        assertThat(text.getValue().length()).isLessThanOrEqualTo(TextLimiter.TELEGRAM_MAX_LENGTH);
     }
 
     private UserRef user() {

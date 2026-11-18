@@ -6,7 +6,6 @@ import com.djonique.cashbackadvbot.dto.RecommendationDto;
 import com.djonique.cashbackadvbot.repository.BankCategoryMccRepository;
 import com.djonique.cashbackadvbot.repository.BankExcludedMccRepository;
 import com.djonique.cashbackadvbot.repository.CategoryRepository;
-import com.djonique.cashbackadvbot.repository.StoreRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -18,6 +17,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -36,7 +36,7 @@ class CashbackAdvisorServiceTest {
     private CategoryRepository categoryRepository;
 
     @Mock
-    private StoreRepository storeRepository;
+    private StoreCatalogService storeCatalogService;
 
     @Mock
     private BankExcludedMccRepository bankExcludedMccRepository;
@@ -151,7 +151,7 @@ class CashbackAdvisorServiceTest {
         Store store = new Store();
         store.setName("Пятёрочка");
         store.setMccCode(MCC);
-        when(storeRepository.findAllWithCategory())
+        when(storeCatalogService.findByNameOrAlias(anyString()))
                 .thenReturn(List.of(store));
         when(bankCategoryMccRepository.findByMccCodeIn(Set.of(MCC)))
                 .thenReturn(List.of());
@@ -219,7 +219,7 @@ class CashbackAdvisorServiceTest {
         Store store = new Store();
         store.setName("Пятёрочка");
         store.setMccCode(MCC);
-        when(storeRepository.findAllWithCategory())
+        when(storeCatalogService.findByNameOrAlias(anyString()))
                 .thenReturn(List.of(store));
         when(bankCategoryMccRepository.findByMccCodeIn(Set.of(MCC)))
                 .thenReturn(List.of(mccRow(1L, 10L)));
@@ -248,7 +248,7 @@ class CashbackAdvisorServiceTest {
         store.setName("Яндекс Такси");
         store.setMccCode("3990");
         store.setCategory(taxi);
-        when(storeRepository.findAllWithCategory())
+        when(storeCatalogService.findByNameOrAlias(anyString()))
                 .thenReturn(List.of(store));
         when(bankCategoryMccRepository.findByMccCodeIn(Set.of("3990")))
                 .thenReturn(List.of(
@@ -277,7 +277,7 @@ class CashbackAdvisorServiceTest {
         store.setName("Пятёрочка");
         store.setMccCode(MCC);
         store.setCategory(storeCategory);
-        when(storeRepository.findAllWithCategory())
+        when(storeCatalogService.findByNameOrAlias(anyString()))
                 .thenReturn(List.of(store));
         when(bankCategoryMccRepository.findByMccCodeIn(Set.of(MCC)))
                 .thenReturn(List.of());
@@ -298,7 +298,7 @@ class CashbackAdvisorServiceTest {
         Category category = new Category();
         category.setId(10L);
         category.setName("Супермаркеты");
-        when(storeRepository.findAllWithCategory())
+        when(storeCatalogService.findByNameOrAlias(anyString()))
                 .thenReturn(List.of());
         when(categoryRepository.findByNameOrAlias("продукты"))
                 .thenReturn(List.of(category));
@@ -314,7 +314,7 @@ class CashbackAdvisorServiceTest {
     void shouldNotRecommendAnything_whenTextMatchesNoStoreAndNoCategory() {
         when(selectionService.getActiveSelections(1L))
                 .thenReturn(List.of(allPurchases(1L, "5")));
-        when(storeRepository.findAllWithCategory())
+        when(storeCatalogService.findByNameOrAlias(anyString()))
                 .thenReturn(List.of());
         when(categoryRepository.findByNameOrAlias("ААААААА"))
                 .thenReturn(List.of());
@@ -328,7 +328,7 @@ class CashbackAdvisorServiceTest {
     void shouldPassSpecialCharactersToCategoryQuery() {
         when(selectionService.getActiveSelections(1L))
                 .thenReturn(List.of(selection(1L, 10L, "5")));
-        when(storeRepository.findAllWithCategory())
+        when(storeCatalogService.findByNameOrAlias(anyString()))
                 .thenReturn(List.of());
         when(categoryRepository.findByNameOrAlias("50%_!"))
                 .thenReturn(List.of());
@@ -339,19 +339,13 @@ class CashbackAdvisorServiceTest {
     }
 
     @Test
-    void shouldNotMatchStore_whenInputIsOnlyPartOfName() {
+    void shouldNotMatchStore_whenCatalogHasNoExactMatch() {
         when(selectionService.getActiveSelections(1L))
                 .thenReturn(List.of(allPurchases(1L, "5")));
-        Store samokat = new Store();
-        samokat.setName("Самокат");
-        samokat.setAliases("самокат, samokat");
-        samokat.setMccCode("3991");
-        Store samberi = new Store();
-        samberi.setName("Самбери");
-        samberi.setAliases("самбери, samberi");
-        samberi.setMccCode("5411");
-        when(storeRepository.findAllWithCategory())
-                .thenReturn(List.of(samokat, samberi));
+        // Каталог отдаёт только точные совпадения по названию/алиасу:
+        // «сам» не равен «Самокат», поэтому поиск уходит в категории.
+        when(storeCatalogService.findByNameOrAlias("сам"))
+                .thenReturn(List.of());
         when(categoryRepository.findByNameOrAlias("сам"))
                 .thenReturn(List.of());
 
@@ -366,7 +360,7 @@ class CashbackAdvisorServiceTest {
         store.setName("Papa John’s");
         store.setAliases("папа джонс, papa johns");
         store.setMccCode("5814");
-        when(storeRepository.findAllWithCategory())
+        when(storeCatalogService.findByNameOrAlias(anyString()))
                 .thenReturn(List.of(store));
         when(bankCategoryMccRepository.findByMccCodeIn(Set.of("5814")))
                 .thenReturn(List.of(mccRow("5814", 1L, 10L)));

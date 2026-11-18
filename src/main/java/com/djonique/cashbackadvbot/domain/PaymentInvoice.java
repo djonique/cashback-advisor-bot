@@ -16,6 +16,7 @@ public class PaymentInvoice {
 
     public static final String STATUS_CREATED = "CREATED";
     public static final String STATUS_PAID = "PAID";
+    public static final String STATUS_EXPIRED = "EXPIRED";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

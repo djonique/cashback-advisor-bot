@@ -9,7 +9,6 @@ import com.djonique.cashbackadvbot.dto.RecommendationDto;
 import com.djonique.cashbackadvbot.repository.BankCategoryMccRepository;
 import com.djonique.cashbackadvbot.repository.BankExcludedMccRepository;
 import com.djonique.cashbackadvbot.repository.CategoryRepository;
-import com.djonique.cashbackadvbot.repository.StoreRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -28,7 +27,7 @@ public class CashbackAdvisorService {
     private final SelectionService selectionService;
     private final BankCategoryMccRepository bankCategoryMccRepository;
     private final CategoryRepository categoryRepository;
-    private final StoreRepository storeRepository;
+    private final StoreCatalogService storeCatalogService;
     private final BankExcludedMccRepository bankExcludedMccRepository;
 
     @Transactional(readOnly = true)
@@ -78,7 +77,7 @@ public class CashbackAdvisorService {
             return targetByMccCodes(Set.of(input), Set.of());
         }
 
-        List<Store> stores = findStores(input);
+        List<Store> stores = storeCatalogService.findByNameOrAlias(input);
         if (!stores.isEmpty()) {
             Set<String> mccCodes = stores.stream()
                     .map(Store::getMccCode)
@@ -97,26 +96,6 @@ public class CashbackAdvisorService {
                 .map(Category::getId)
                 .collect(Collectors.toSet());
         return new SearchTarget(categoryIds, Set.of(), false, Set.of());
-    }
-
-    private List<Store> findStores(String text) {
-        return storeRepository.findAllWithCategory().stream()
-                .filter(store -> matchesStore(store, text))
-                .toList();
-    }
-
-    private boolean matchesStore(Store store, String text) {
-        if (store.getName().equalsIgnoreCase(text)) {
-            return true;
-        }
-        String aliases = store.getAliases();
-        if (aliases == null || aliases.isBlank()) {
-            return false;
-        }
-        // Алиасы хранятся одной строкой через запятую — сравниваем каждый целиком.
-        return Arrays.stream(aliases.split(","))
-                .map(String::trim)
-                .anyMatch(alias -> alias.equalsIgnoreCase(text));
     }
 
     private SearchTarget targetByMccCodes(Set<String> mccCodes, Set<Long> categoryFilter) {

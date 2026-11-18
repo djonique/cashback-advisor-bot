@@ -9,6 +9,7 @@ import com.djonique.cashbackadvbot.dto.UserRef;
 import com.djonique.cashbackadvbot.service.CashbackAdvisorService;
 import com.djonique.cashbackadvbot.service.UserStateService;
 import com.djonique.cashbackadvbot.util.LogUtils;
+import com.djonique.cashbackadvbot.util.TextLimiter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -26,7 +27,6 @@ public class CardHandler {
     private static final String NOT_FOUND_TEXT =
             "Я не нашел карт, подходящих под Ваш запрос.";
     private static final String[] MEDALS = {"🥇", "🥈", "🥉"};
-    private static final int MAX_MESSAGE_LENGTH = 4000;
     private static final int MAX_INPUT_DISPLAY_LENGTH = 100;
 
     private final CashbackAdvisorService cashbackAdvisorService;
@@ -80,15 +80,15 @@ public class CardHandler {
                     + recommendation.bankName() + " — "
                     + formatPercent(recommendation.percent()) + "% ("
                     + recommendation.categoryName() + ")\n";
-            if (text.length() + line.length() > MAX_MESSAGE_LENGTH) {
-                if (text.length() < MAX_MESSAGE_LENGTH) {
+            if (text.length() + line.length() > TextLimiter.TELEGRAM_MAX_LENGTH) {
+                if (text.length() < TextLimiter.TELEGRAM_MAX_LENGTH) {
                     text.append('…');
                 }
                 break;
             }
             text.append(line);
         }
-        return text.toString().stripTrailing();
+        return TextLimiter.truncate(text.toString().stripTrailing());
     }
 
     private String medal(int index) {

@@ -26,4 +26,19 @@ public interface PaymentInvoiceRepository extends JpaRepository<PaymentInvoice, 
                  @Param("paidStatus") String paidStatus,
                  @Param("createdStatus") String createdStatus,
                  @Param("paidAt") Instant paidAt);
+
+    /*
+     * Переводит брошенные счета в EXPIRED. Условие по статусу защищает
+     * уже оплаченные счета от случайной перезаписи.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            UPDATE PaymentInvoice i
+            SET i.status = :expiredStatus
+            WHERE i.status = :createdStatus
+              AND i.createdAt < :threshold
+            """)
+    int expireCreatedBefore(@Param("threshold") Instant threshold,
+                            @Param("expiredStatus") String expiredStatus,
+                            @Param("createdStatus") String createdStatus);
 }
