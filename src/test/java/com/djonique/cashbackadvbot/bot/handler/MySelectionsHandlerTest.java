@@ -10,11 +10,11 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class MenuHandlerTest {
+class MySelectionsHandlerTest {
 
     @Test
     void shouldReportNoSelections_whenNothingConfigured() {
-        assertThat(MenuHandler.buildMySelectionsText(List.of()))
+        assertThat(MySelectionsHandler.buildMySelectionsText(List.of()))
                 .isEqualTo("У вас пока нет настроенных категорий на этот месяц.\n\n"
                         + "Нажмите «⚙️ Настроить кэшбэк», чтобы выбрать категории.");
     }
@@ -28,7 +28,7 @@ class MenuHandlerTest {
                 selection("Сбербанк", "pharmacies", "Аптеки", "5"),
                 selection("Т-Банк", "all_purchases", "Все покупки", "1.00"));
 
-        assertThat(MenuHandler.buildMySelectionsText(selections))
+        assertThat(MySelectionsHandler.buildMySelectionsText(selections))
                 .isEqualTo("📊 Ваши категории кэшбэка на текущий месяц:\n\n"
                         + "🏦 Сбербанк:\n"
                         + "• Все покупки — 1%\n"
@@ -47,7 +47,7 @@ class MenuHandlerTest {
                     "slug" + i, "Очень длинное название категории " + i, new BigDecimal("5")));
         }
 
-        String text = MenuHandler.buildMySelectionsText(selections);
+        String text = MySelectionsHandler.buildMySelectionsText(selections);
 
         assertThat(text).hasSize(TextLimiter.TELEGRAM_MAX_LENGTH);
         assertThat(text).endsWith("…");

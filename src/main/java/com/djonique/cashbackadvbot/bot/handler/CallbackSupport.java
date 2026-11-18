@@ -1,5 +1,6 @@
 package com.djonique.cashbackadvbot.bot.handler;
 
+import com.djonique.cashbackadvbot.bot.BotMessages;
 import com.djonique.cashbackadvbot.bot.BotSender;
 import com.djonique.cashbackadvbot.bot.state.DialogState;
 import com.djonique.cashbackadvbot.dto.UserRef;
@@ -45,7 +46,7 @@ public class CallbackSupport {
 
     public boolean ensureState(UserRef user, CallbackQuery callbackQuery, DialogState... allowedStates) {
         if (user == null) {
-            botSender.answerCallback(callbackQuery.getId(), "Не удалось определить пользователя");
+            botSender.answerCallback(callbackQuery.getId(), BotMessages.USER_NOT_FOUND);
             return true;
         }
         DialogState current = userStateService.getState(user.id());

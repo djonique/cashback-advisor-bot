@@ -1,6 +1,5 @@
 package com.djonique.cashbackadvbot.bot.handler;
 
-import com.djonique.cashbackadvbot.bot.BotButtons;
 import com.djonique.cashbackadvbot.bot.BotSender;
 import com.djonique.cashbackadvbot.bot.CallbackData;
 import com.djonique.cashbackadvbot.bot.keyboard.KeyboardFactory;
@@ -10,9 +9,6 @@ import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.MaybeInaccessibleMessage;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
-
-import java.util.List;
 
 @Component
 @RequiredArgsConstructor
@@ -84,11 +80,16 @@ public class HelpHandler {
 
     public void handleHelp(CallbackQuery callbackQuery, String data) {
         switch (data) {
-            case CallbackData.HELP_GENERAL -> editHelpMessage(callbackQuery, HELP_GENERAL_TEXT, backToHelpKeyboard());
-            case CallbackData.HELP_SETUP -> editHelpMessage(callbackQuery, HELP_SETUP_TEXT, backToHelpKeyboard());
-            case CallbackData.HELP_STORE -> editHelpMessage(callbackQuery, HELP_STORE_TEXT, backToHelpKeyboard());
-            case CallbackData.HELP_CATEGORY -> editHelpMessage(callbackQuery, HELP_CATEGORY_TEXT, backToHelpKeyboard());
-            case CallbackData.HELP_MCC -> editHelpMessage(callbackQuery, HELP_MCC_TEXT, backToHelpKeyboard());
+            case CallbackData.HELP_GENERAL ->
+                    editHelpMessage(callbackQuery, HELP_GENERAL_TEXT, keyboardFactory.getBackToHelpKeyboard());
+            case CallbackData.HELP_SETUP ->
+                    editHelpMessage(callbackQuery, HELP_SETUP_TEXT, keyboardFactory.getBackToHelpKeyboard());
+            case CallbackData.HELP_STORE ->
+                    editHelpMessage(callbackQuery, HELP_STORE_TEXT, keyboardFactory.getBackToHelpKeyboard());
+            case CallbackData.HELP_CATEGORY ->
+                    editHelpMessage(callbackQuery, HELP_CATEGORY_TEXT, keyboardFactory.getBackToHelpKeyboard());
+            case CallbackData.HELP_MCC ->
+                    editHelpMessage(callbackQuery, HELP_MCC_TEXT, keyboardFactory.getBackToHelpKeyboard());
             default -> log.warn("Неизвестный help callback: {}", data);
         }
     }
@@ -109,14 +110,5 @@ public class HelpHandler {
             botSender.send(message.getChatId(), text, keyboard);
         }
         botSender.answerCallback(callbackQuery.getId(), null);
-    }
-
-    private InlineKeyboardMarkup backToHelpKeyboard() {
-        return InlineKeyboardMarkup.builder()
-                .keyboardRow(List.of(InlineKeyboardButton.builder()
-                        .text("🔙 " + BotButtons.BACK)
-                        .callbackData(CallbackData.MENU_HELP)
-                        .build()))
-                .build();
     }
 }

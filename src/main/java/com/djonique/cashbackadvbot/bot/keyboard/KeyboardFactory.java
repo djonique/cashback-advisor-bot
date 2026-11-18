@@ -89,6 +89,12 @@ public class KeyboardFactory {
                 .build();
     }
 
+    public InlineKeyboardMarkup getBackToHelpKeyboard() {
+        return InlineKeyboardMarkup.builder()
+                .keyboardRow(List.of(button("🔙 " + BotButtons.BACK, CallbackData.MENU_HELP)))
+                .build();
+    }
+
     public InlineKeyboardMarkup getBankListKeyboard(List<BankDto> banks) {
         InlineKeyboardMarkup.InlineKeyboardMarkupBuilder builder = InlineKeyboardMarkup.builder();
         banks.forEach(bank -> builder.keyboardRow(

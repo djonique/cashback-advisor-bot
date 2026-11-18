@@ -1,5 +1,6 @@
 package com.djonique.cashbackadvbot.bot.handler;
 
+import com.djonique.cashbackadvbot.bot.BotMessages;
 import com.djonique.cashbackadvbot.bot.BotSender;
 import com.djonique.cashbackadvbot.bot.CallbackData;
 import com.djonique.cashbackadvbot.bot.keyboard.KeyboardFactory;
@@ -28,8 +29,6 @@ public class SetupHandler {
     private static final String CHOOSE_CATEGORIES_TEXT =
             "Выберите категории для кешбэка (нажмите на категорию, чтобы отметить):";
     private static final String CONTEXT_LOST_TEXT = "Контекст настройки потерян, начните заново";
-    private static final String USER_ERROR_TEXT = "Не удалось определить пользователя";
-    private static final String EDIT_ERROR_TEXT = "Не удалось обновить меню";
     private static final String INVALID_BANK_TEXT = "Некорректный банк";
 
     private final CallbackSupport callbackSupport;
@@ -42,13 +41,13 @@ public class SetupHandler {
     public void handleSetup(CallbackQuery callbackQuery) {
         UserRef user = callbackSupport.resolveUser(callbackQuery);
         if (user == null) {
-            botSender.answerCallback(callbackQuery.getId(), USER_ERROR_TEXT);
+            botSender.answerCallback(callbackQuery.getId(), BotMessages.USER_NOT_FOUND);
             return;
         }
         List<BankDto> banks = prepareBankSelection(user);
         if (!callbackSupport.editOrSend(callbackQuery, CHOOSE_BANK_TEXT,
                 keyboardFactory.getBankListKeyboard(banks))) {
-            botSender.answerCallback(callbackQuery.getId(), EDIT_ERROR_TEXT);
+            botSender.answerCallback(callbackQuery.getId(), BotMessages.MENU_UPDATE_FAILED);
             return;
         }
         botSender.answerCallback(callbackQuery.getId(), null);
@@ -89,7 +88,7 @@ public class SetupHandler {
                 bankId, user.id(), categories.size());
         if (!callbackSupport.editOrSend(callbackQuery, CHOOSE_CATEGORIES_TEXT,
                 keyboardFactory.getCategoryKeyboard(categories, context.selectedCategoryIds()))) {
-            botSender.answerCallback(callbackQuery.getId(), EDIT_ERROR_TEXT);
+            botSender.answerCallback(callbackQuery.getId(), BotMessages.MENU_UPDATE_FAILED);
             return;
         }
         botSender.answerCallback(callbackQuery.getId(), null);

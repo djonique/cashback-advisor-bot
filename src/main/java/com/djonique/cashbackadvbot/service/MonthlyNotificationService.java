@@ -12,6 +12,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.YearMonth;
 import java.time.ZoneId;
@@ -40,6 +41,7 @@ public class MonthlyNotificationService {
      * календарю — той же зоне, в которой сохраняются выборы пользователя.
      */
     @Scheduled(cron = "0 20 0 1 * *", zone = "Europe/Moscow")
+    @Transactional
     public void deleteOldSelections() {
         String currentMonth = YearMonth.now(STORAGE_ZONE).toString();
         userBankSelectionRepository.deleteOldSelections(currentMonth);
